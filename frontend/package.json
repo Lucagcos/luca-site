@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "tsc --ignoreConfig src/game.ts --outDir node_modules/.cache/outlier-tests --module nodenext --target es2023 --skipLibCheck && node --test tests/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
