@@ -2,10 +2,14 @@
 .header { height: 96px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
 .brand { display: flex; align-items: center; font-family: 'Manrope', sans-serif; font-size: 29px; font-weight: 800; letter-spacing: -1.2px; text-decoration: none; }
 .brand-mark { display: grid; place-items: center; background: var(--crimson); color: white; width: 42px; height: 42px; border-radius: 12px; margin-right: 11px; }
+.brand-mark img { display: block; width: 100%; height: 100%; }
 .brand-dot { color: var(--crimson); }
 nav button { border: 0; background: none; font-size: 13px; display: flex; align-items: center; gap: 10px; padding: 12px 0; }
 .help-circle { border: 1px solid var(--muted); border-radius: 50%; font-size: 10px; width: 18px; height: 18px; display: grid; place-items: center; }
 .play-layout { max-width: 800px; margin: 42px auto 0; }
+.week-picker { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 16px; font-size: 13px; }
+.week-picker select { max-width: 65%; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: white; color: var(--ink); font: inherit; }
+.primary-button:disabled { opacity: .5; cursor: not-allowed; }
 .game-card { background: white; border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 8px 32px #54162408; overflow: hidden; }
 .game-topline { padding: 18px 32px; display: flex; justify-content: space-between; gap: 12px; background: var(--tint); border-bottom: 1px solid var(--border); font-size: 9px; letter-spacing: 1.2px; font-weight: 700; color: var(--crimson); }
 .game-topline > span:first-child { display: flex; gap: 8px; align-items: center; }
@@ -53,6 +57,7 @@ form label { display: block; font-size: 10px; font-weight: 700; letter-spacing: 
 .personal-best > strong { font-family: 'Manrope', sans-serif; font-size: 17px; }
 .personal-best small { font-size: 11px; font-weight: 400; color: var(--muted); }
 .answer-result { margin-top: 26px; }
+.answer-result > .primary-button { margin-top: 28px; }
 .result-banner { display: flex; gap: 12px; align-items: center; padding: 18px; background: var(--tint); color: #791b34; border-radius: 8px; }
 .result-banner strong { font-size: 16px; }
 .result-banner p { font-size: 13px; margin-top: 4px; line-height: 1.6; }

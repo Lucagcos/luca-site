@@ -8,6 +8,7 @@ export type Question = {
   detail: string
   answers: Answer[]
   source?: string
+  week?: string
 }
 
 const answer = (name: string, points: number, aliases?: string[]): Answer => ({ name, points, aliases })

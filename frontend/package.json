@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "tsc --ignoreConfig src/game.ts src/customQuestions.ts src/questionEditor.ts --outDir node_modules/.cache/niche-tests --module esnext --moduleResolution bundler --target es2023 --skipLibCheck && node --test tests/*.test.mjs",
+    "test": "tsc --ignoreConfig src/game.ts src/customQuestions.ts src/questionEditor.ts src/weeklyGame.ts --outDir node_modules/.cache/niche-tests --module esnext --moduleResolution bundler --target es2023 --skipLibCheck && node --test tests/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

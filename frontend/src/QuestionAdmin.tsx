@@ -2,23 +2,25 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { customQuestions } from './customQuestions'
 import type { Pack, Question } from './game'
-import { editorStorageKey, exportQuestions, parseAliases, validateQuestions } from './questionEditor'
+import { appendWeek, editorStorageKey, exportQuestions, parseAliases, validateQuestions } from './questionEditor'
+import { defaultWeek, listWeeks } from './weeklyGame'
 import './QuestionAdmin.css'
 
 type AnswerDraft = { name: string; aliases: string; points: string }
 type Draft = {
-  id: string; category: string; pack: Pack; prompt: string; detail: string; source: string
+  id: string; category: string; pack: Pack; week: string; prompt: string; detail: string; source: string
   answers: AnswerDraft[]
 }
 
 const blankAnswer = (): AnswerDraft => ({ name: '', aliases: '', points: '50' })
 const blankQuestion = (): Draft => ({
-  id: 'custom-', category: '', pack: 'classic', prompt: '', detail: '', source: '', answers: [blankAnswer()],
+  id: 'custom-', category: '', pack: 'grover', week: defaultWeek, prompt: '', detail: '', source: '', answers: [blankAnswer()],
 })
 
 function toDraft(question: Question): Draft {
   return {
     ...question,
+    week: question.week ?? defaultWeek,
     source: question.source ?? '',
     answers: question.answers.map((answer) => ({
       name: answer.name, aliases: (answer.aliases ?? []).join('\n'), points: String(answer.points),
@@ -56,6 +58,7 @@ export default function QuestionAdmin() {
   const [error, setError] = useState(initial.error)
   const [message, setMessage] = useState('')
   const [importText, setImportText] = useState('')
+  const [uploadWeek, setUploadWeek] = useState('')
 
   useEffect(() => {
     if (!dirty) return
@@ -157,13 +160,26 @@ export default function QuestionAdmin() {
     }
   }
 
+  async function upload(file: File) {
+    if (dirty) {
+      setError('Save or discard the current question before uploading a week.')
+      return
+    }
+    try {
+      const next = appendWeek(bank, JSON.parse(await file.text()), uploadWeek)
+      if (persist(next, `Added ${uploadWeek.trim()} without changing previous weeks. Export to publish it.`)) setUploadWeek('')
+    } catch (error) {
+      setError(`Could not upload week: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   return (
     <main className="question-admin">
       <header className="admin-header">
         <div><p className="admin-eyebrow">NICHE / LOCAL ADMIN</p><h1>Question editor</h1></div>
         <a href="/" onClick={(event) => { if (dirty && !window.confirm('Leave and discard unsaved changes?')) event.preventDefault() }}>Back to game</a>
       </header>
-      <p className="admin-description">Create questions visually. Save in this browser, then export <code>customQuestions.ts</code> and replace <code>frontend/src/customQuestions.ts</code> before building and deploying. This editor is development-only, not an online publishing tool.</p>
+      <p className="admin-description">Create questions visually or upload a new weekly JSON pack below. Previous weeks stay in the bank. Save in this browser, then export <code>customQuestions.ts</code> and replace <code>frontend/src/customQuestions.ts</code> before building and deploying. Keep published week names and questions unchanged. This editor is development-only, not an online publishing tool.</p>
       {error && <p className="admin-error" role="alert">{error}</p>}
       {message && <p className="admin-message" role="status">{message}</p>}
       <div className="admin-layout">
@@ -172,7 +188,7 @@ export default function QuestionAdmin() {
           <button type="button" onClick={() => select()}>New question</button>
           <ul className="admin-question-list">{bank.map((question) => (
             <li key={question.id}><button type="button" aria-pressed={editingId === question.id} onClick={() => select(question)}>
-              <strong>{question.prompt}</strong><small>{question.id} / {question.pack}</small>
+              <strong>{question.prompt}</strong><small>{question.id} / {question.pack} / {question.week ?? defaultWeek}</small>
             </button></li>
           ))}</ul>
           {bank.length === 0 && <p>No custom questions saved yet.</p>}
@@ -180,6 +196,16 @@ export default function QuestionAdmin() {
             <button type="button" onClick={() => exportBank('ts')}>Export customQuestions.ts</button>
             <button type="button" onClick={() => exportBank('json')}>Download JSON backup</button>
           </div>
+          <section className="admin-import">
+            <h3>Upload a new week</h3>
+            <label>New week name<input value={uploadWeek} onChange={(event) => setUploadWeek(event.target.value)} placeholder="Week 2" /></label>
+            <p>Upload a JSON array of questions. It becomes a new Grover week; existing weeks are kept. Uploaded IDs are prefixed with the week name. New weeks appear first in the game selector.</p>
+            <label>Questions JSON file<input type="file" accept=".json,application/json" disabled={!uploadWeek.trim() || dirty} onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void upload(file)
+            }} /></label>
+          </section>
           <details className="admin-import"><summary>Restore JSON backup</summary>
             <label htmlFor="import-bank">Paste the JSON array from your backup</label>
             <textarea id="import-bank" rows={8} value={importText} onChange={(event) => setImportText(event.target.value)} />
@@ -189,9 +215,10 @@ export default function QuestionAdmin() {
         <form className="admin-panel admin-form" onSubmit={save}>
           <h2>{editingId === null ? 'New question' : 'Edit question'}{dirty ? ' (unsaved)' : ''}</h2>
           <div className="admin-fields">
-            <label>ID<input required value={draft.id} onChange={(event) => update({ ...draft, id: event.target.value })} /><small>Unique across both packs. Use custom- to prioritize Classic questions. Custom Grover questions replace the built-in Grover bank regardless of ID.</small></label>
+            <label>ID<input required value={draft.id} onChange={(event) => update({ ...draft, id: event.target.value })} /><small>Unique across all weeks and packs. Use a week-specific ID such as week-2-q1. Uploaded weekly packs get prefixed IDs automatically.</small></label>
             <label>Category<input required value={draft.category} onChange={(event) => update({ ...draft, category: event.target.value })} /></label>
             <label>Pack<select value={draft.pack} onChange={(event) => update({ ...draft, pack: event.target.value === 'grover' ? 'grover' : 'classic' })}><option value="classic">Classic</option><option value="grover">Grover</option></select></label>
+            <label>Week name<input required list="existing-weeks" value={draft.week} onChange={(event) => update({ ...draft, week: event.target.value })} /><datalist id="existing-weeks">{listWeeks(bank).map((week) => <option key={week} value={week} />)}</datalist><small>Use a new name for a new week. Never rename a published week; the name identifies players' saved games.</small></label>
             <label>Source URL (optional)<input type="url" value={draft.source} onChange={(event) => update({ ...draft, source: event.target.value })} /></label>
           </div>
           <label>Prompt<textarea required rows={2} value={draft.prompt} onChange={(event) => update({ ...draft, prompt: event.target.value })} /></label>
