@@ -682,15 +682,6 @@ export const customQuestions: Question[] = [
         ]
       },
       {
-        "name": "Physical Learning Center",
-        "points": 20,
-        "aliases": [
-          "PLC",
-          "Physical Learning",
-          "Physical"
-        ]
-      },
-      {
         "name": "Rathburn Hall",
         "points": 20,
         "aliases": [
