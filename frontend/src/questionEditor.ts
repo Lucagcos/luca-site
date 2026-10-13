@@ -18,9 +18,9 @@ function text(value: unknown, label: string, required = true): string {
   return value.trim()
 }
 
-export function validateQuestions(value: unknown): Question[] {
+export function validateQuestions(value: unknown, reservedIds = questions.map((question) => question.id)): Question[] {
   if (!Array.isArray(value)) throw new Error('Questions must be a JSON array.')
-  const ids = new Set(questions.map((question) => question.id))
+  const ids = new Set(reservedIds)
   return value.map((item: unknown, index) => {
     const label = `Question ${index + 1}`
     if (!isRecord(item)) throw new Error(`${label} must be an object.`)
@@ -68,6 +68,7 @@ export function validateQuestions(value: unknown): Question[] {
       detail: text(item.detail, `${label} detail`, false),
       answers,
     }
+    if (item.week !== undefined) question.week = text(item.week, `${label} week`)
     if (item.source !== undefined && item.source !== '') {
       const source = text(item.source, `${label} source`)
       let url: URL
@@ -83,6 +84,18 @@ export function validateQuestions(value: unknown): Question[] {
     }
     return question
   })
+}
+
+export function appendWeek(bank: Question[], value: unknown, week: string): Question[] {
+  const name = text(week, 'Week')
+  if (bank.some((question) => question.pack === 'grover' && (question.week ?? 'Week 1') === name)) {
+    throw new Error(`"${name}" already exists. Use a new week name to preserve previous weeks.`)
+  }
+  if (!Array.isArray(value) || value.length === 0) throw new Error('Upload a non-empty JSON array of questions.')
+  return validateQuestions([...bank, ...value.map((item: unknown) => {
+    if (!isRecord(item)) throw new Error('Each uploaded question must be an object.')
+    return { ...item, id: `${name}:${text(item.id, 'Uploaded question ID')}`, pack: 'grover', week: name }
+  })])
 }
 
 export function exportQuestions(value: unknown): string {
