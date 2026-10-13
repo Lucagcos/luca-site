@@ -155,6 +155,53 @@ export function findAnswer(question: Question, input: string): Answer | undefine
     [name, ...aliases].some((value) => normalizeAnswer(value) === normalized))
 }
 
+function editDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, i) => i)
+  for (let i = 1; i <= left.length; i++) {
+    const current = [i]
+    for (let j = 1; j <= right.length; j++) {
+      current[j] = Math.min(
+        current[j - 1] + 1,
+        previous[j] + 1,
+        previous[j - 1] + (left[i - 1] === right[j - 1] ? 0 : 1),
+      )
+    }
+    previous = current
+  }
+  return previous[right.length]
+}
+
+export type AnswerMatch =
+  | { kind: 'exact'; answer: Answer }
+  | { kind: 'correction'; answer: Answer }
+  | { kind: 'ambiguous' }
+  | { kind: 'missing' }
+
+export function matchAnswer(question: Question, input: string): AnswerMatch {
+  const normalized = normalizeAnswer(input)
+  if (!normalized) return { kind: 'missing' }
+  const exact = findAnswer(question, input)
+  if (exact) {
+    return { kind: normalizeAnswer(exact.name) === normalized ? 'exact' : 'correction', answer: exact }
+  }
+  let closest: Answer[] = []
+  let bestDistance = 3
+  for (const answer of question.answers) {
+    const distance = Math.min(...[answer.name, ...(answer.aliases ?? [])].map((name) => {
+      const candidate = normalizeAnswer(name)
+      return Math.abs(candidate.length - normalized.length) > 2 ? 3 : editDistance(normalized, candidate)
+    }))
+    if (distance < bestDistance) {
+      bestDistance = distance
+      closest = [answer]
+    } else if (distance === bestDistance && distance <= 2) {
+      closest.push(answer)
+    }
+  }
+  if (closest.length > 1) return { kind: 'ambiguous' }
+  return closest.length === 1 ? { kind: 'correction', answer: closest[0] } : { kind: 'missing' }
+}
+
 export function rarity(points: number): string {
   if (points >= 90) return 'Legendary'
   if (points >= 65) return 'Rare'
