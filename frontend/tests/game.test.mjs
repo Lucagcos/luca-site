@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { findAnswer, makeDeck, normalizeAnswer, questions, rarity } from '../node_modules/.cache/niche-tests/game.js'
+import { findAnswer, makeDeck, matchAnswer, normalizeAnswer, questions, rarity } from '../node_modules/.cache/niche-tests/game.js'
 
 test('matching handles case, spacing, punctuation, diacritics and aliases', () => {
   const languages = questions.find((q) => q.id === 'ese')
@@ -8,6 +8,56 @@ test('matching handles case, spacing, punctuation, diacritics and aliases', () =
   const halls = questions.find((q) => q.id === 'halls')
   assert.equal(findAnswer(halls, 'mary ethel pew hall')?.name, 'MEP Hall')
   assert.equal(normalizeAnswer('Paul J. McNulty'), 'pauljmcnulty')
+})
+
+test('canonical matches score directly while aliases require canonical confirmation', () => {
+  const halls = questions.find((q) => q.id === 'halls')
+  assert.equal(matchAnswer(halls, '  mép HALL!! ').kind, 'exact')
+  const alias = matchAnswer(halls, 'mary ethel pew hall')
+  assert.equal(alias.kind, 'correction')
+  assert.equal(alias.answer.name, 'MEP Hall')
+  assert.equal(matchAnswer(halls, alias.answer.name).kind, 'exact')
+})
+
+test('one and two character typos correct names and aliases without scoring', () => {
+  const question = {
+    ...questions[0],
+    answers: [{ name: 'Bookstore', points: 40 }, { name: 'Dining hall', aliases: ['Hicks'], points: 10 }],
+  }
+  for (const input of ['Bookstor', 'Bookstoore', 'Booxstore', 'Booxstor', 'Booxstoxe', 'Bookstroe']) {
+    const match = matchAnswer(question, input)
+    assert.equal(match.kind, 'correction', input)
+    assert.equal(match.answer.name, 'Bookstore', input)
+    assert.equal(matchAnswer(question, match.answer.name).kind, 'exact')
+  }
+  assert.equal(matchAnswer(question, 'Hixks').answer.name, 'Dining hall')
+  assert.equal(matchAnswer(question, 'Bxxxstore').kind, 'missing')
+})
+
+test('exact matches outrank fuzzy candidates and the unique closest match wins', () => {
+  const question = {
+    ...questions[0],
+    answers: [{ name: 'Alpha', points: 50 }, { name: 'Alphab', points: 60 }],
+  }
+  assert.equal(matchAnswer(question, 'Alpha').kind, 'exact')
+  assert.equal(matchAnswer(question, 'Alpxa').answer.name, 'Alpha')
+  assert.equal(matchAnswer(question, 'Alphax').kind, 'ambiguous')
+})
+
+test('multiple equally close aliases for the same answer do not create ambiguity', () => {
+  const question = {
+    ...questions[0],
+    answers: [{ name: 'Dining hall', aliases: ['Hicks', 'Hickz'], points: 10 }],
+  }
+  assert.equal(matchAnswer(question, 'Hick').kind, 'correction')
+  assert.equal(matchAnswer(question, 'Hick').answer.name, 'Dining hall')
+})
+
+test('empty and unrelated inputs never produce a fuzzy correction', () => {
+  const halls = questions.find((q) => q.id === 'halls')
+  for (const input of ['', ' ', '!!!', 'unknown answer', 'z'.repeat(120)]) {
+    assert.equal(matchAnswer(halls, input).kind, 'missing')
+  }
 })
 
 test('invalid and empty inputs do not award points', () => {
