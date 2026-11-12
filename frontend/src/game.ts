@@ -145,8 +145,9 @@ export const questions: Question[] = [
 ]
 
 export function normalizeAnswer(value: string): string {
-  return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().replace(/[^a-z0-9]/g, '')
+  const normalized = value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9+#]/g, '')
+  return /[a-z0-9]/.test(normalized) ? normalized : ''
 }
 
 export function findAnswer(question: Question, input: string): Answer | undefined {
@@ -185,12 +186,14 @@ export function matchAnswer(question: Question, input: string): AnswerMatch {
   if (exact) {
     return { kind: normalizeAnswer(exact.name) === normalized ? 'exact' : 'correction', answer: exact }
   }
+  if (normalized.replace(/[+#]/g, '').length < 3) return { kind: 'missing' }
   let closest: Answer[] = []
   let bestDistance = 3
   for (const answer of question.answers) {
     const distance = Math.min(...[answer.name, ...(answer.aliases ?? [])].map((name) => {
       const candidate = normalizeAnswer(name)
-      return Math.abs(candidate.length - normalized.length) > 2 ? 3 : editDistance(normalized, candidate)
+      return candidate.replace(/[+#]/g, '').length < 3 || Math.abs(candidate.length - normalized.length) > 2
+        ? 3 : editDistance(normalized, candidate)
     }))
     if (distance < bestDistance) {
       bestDistance = distance

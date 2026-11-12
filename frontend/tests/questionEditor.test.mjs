@@ -59,6 +59,29 @@ test('alias validation matches game normalization and rejects cross-answer colli
   }]))
 })
 
+test('editor saves and exports C, C# and C++ as separate playable answers', () => {
+  const question = {
+    ...example(),
+    answers: [
+      { name: 'C', points: 10 },
+      { name: 'C#', aliases: ['C sharp'], points: 50 },
+      { name: 'C++', points: 100 },
+    ],
+  }
+  const [saved] = validateQuestions([question])
+  assert.deepEqual(saved, question)
+  for (const answer of saved.answers) {
+    assert.equal(findAnswer(saved, answer.name)?.points, answer.points)
+    assert.ok(exportQuestions([saved]).includes(`"name": "${answer.name}"`))
+  }
+  assert.throws(() => validateQuestions([{
+    ...question, answers: [...question.answers, { name: 'Other', aliases: [' c # '], points: 75 }],
+  }]), /matches another answer/)
+  for (const name of ['#', '++']) {
+    assert.throws(() => validateQuestions([{ ...example(), answers: [{ name, points: 50 }] }]), /letter or number/)
+  }
+})
+
 test('editor splits comma-separated and newline-separated aliases including old saved entries', () => {
   assert.deepEqual(parseAliases(' CFA, Chick-fil-a,\r\nChick\n\n, Kiosk '), ['CFA', 'Chick-fil-a', 'Chick', 'Kiosk'])
   const question = {

@@ -19,6 +19,35 @@ test('canonical matches score directly while aliases require canonical confirmat
   assert.equal(matchAnswer(halls, alias.answer.name).kind, 'exact')
 })
 
+test('symbol-bearing names remain distinct and short answers require exact matches', () => {
+  const question = {
+    ...questions[0],
+    answers: [
+      { name: 'C', points: 10 },
+      { name: 'C#', aliases: ['C sharp'], points: 50 },
+      { name: 'C++', points: 100 },
+      { name: 'CSS', points: 40 },
+    ],
+  }
+  for (const name of ['C', 'C#', 'C++']) {
+    const match = matchAnswer(question, ` ${name.toLowerCase()}!! `)
+    assert.equal(match.kind, 'exact')
+    assert.equal(match.answer.name, name)
+  }
+  assert.equal(matchAnswer(question, 'c sharp').kind, 'correction')
+  for (const input of ['D', 'D#', 'D++', 'CS', '+', '#', '++']) {
+    assert.equal(matchAnswer(question, input).kind, 'missing', input)
+  }
+  assert.equal(matchAnswer({ ...question, answers: [{ name: 'C++', points: 100 }] }, 'CPP').kind, 'missing')
+})
+
+test('typo correction starts at three letters or digits for both input and candidate', () => {
+  const question = { ...questions[0], answers: [{ name: 'Cat', points: 50 }] }
+  assert.equal(matchAnswer(question, 'Ca').kind, 'missing')
+  assert.equal(matchAnswer(question, 'Cot').kind, 'correction')
+  assert.equal(matchAnswer({ ...question, answers: [{ name: 'CA', points: 50 }] }, 'CAT').kind, 'missing')
+})
+
 test('one and two character typos correct names and aliases without scoring', () => {
   const question = {
     ...questions[0],
