@@ -17,8 +17,8 @@ test('legacy questions become Week 1 and newly added weeks appear first', () => 
   const bank = [question('old'), question('a', 'Week 2'), question('b', 'Week 2'), { ...question('c', 'Hidden'), pack: 'classic' }]
   assert.deepEqual(listWeeks(bank), ['Week 2', 'Week 1'])
   assert.deepEqual(listWeeks([]), ['Week 1'])
-  assert.deepEqual(weeklyDeck('Week 2', bank).map((q) => q.id).sort(), ['a', 'b'])
-  assert.deepEqual(weeklyDeck('Week 1', bank).map((q) => q.id), ['old'])
+  assert.throws(() => weeklyDeck('Week 2', bank), /at least five questions/)
+  assert.throws(() => weeklyDeck('Week 1', bank), /at least five questions/)
   assert.equal(weeklyDeck('Week 1', []).length, 5)
   assert.throws(() => weeklyDeck('Unknown', bank), /No questions/)
 })
@@ -30,6 +30,14 @@ test('weekly decks preserve five-round limits and do not borrow from older weeks
   assert.equal(deck.length, 5)
   assert.equal(new Set(deck.map((q) => q.id)).size, 5)
   assert.ok(deck.every((q) => q.week === 'Week 2'))
+})
+
+test('exactly five questions remain unique and undersized weeks cannot start shorter games', () => {
+  const bank = Array.from({ length: 5 }, (_, i) => question(`id-${i}`, 'Week 2'))
+  assert.deepEqual(weeklyDeck('Week 2', bank).map((q) => q.id).sort(), bank.map((q) => q.id))
+  for (let count = 1; count < 5; count++) {
+    assert.throws(() => weeklyDeck('Week 2', bank.slice(0, count)), /at least five questions/)
+  }
 })
 
 test('uploads append a new week, namespace IDs, and preserve previous content', () => {

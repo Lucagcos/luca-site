@@ -25,6 +25,59 @@ function AnswerBank({ question }: { question: Question }) {
 type RoundResult = { question: Question; answer?: Answer; skipped: boolean; timedOut?: boolean }
 const weeks = listWeeks(customQuestions)
 
+function AnimatedScore({ value }: { value: number }) {
+  const [display, setDisplay] = useState(value)
+  const current = useRef(value)
+
+  useEffect(() => {
+    const from = current.current
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const duration = reducedMotion ? 0 : Math.min(1600, Math.max(450, Math.abs(value - from) * 14))
+    let start: number | undefined
+    let frame: number
+    function tick(now: number) {
+      start ??= now
+      const progress = duration === 0 ? 1 : Math.min(1, (now - start) / duration)
+      current.current = Math.round(from + (value - from) * progress)
+      setDisplay(current.current)
+      if (progress < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [value])
+
+  return <strong aria-label={`${value} points`}><span aria-hidden="true">{String(display).padStart(3, '0')}</span></strong>
+}
+
+function ScoreChart({ results }: { results: RoundResult[] }) {
+  return (
+    <figure className="score-chart">
+      <figcaption>YOUR RUN <span>POINTS / QUESTION</span></figcaption>
+      <div className="chart-area">
+        <div className="chart-axis" aria-hidden="true">{[100, 75, 50, 25, 0].map((tick) => <span key={tick}>{tick}</span>)}</div>
+        <ol className="chart-bars" aria-label="Points per question, on a scale from 0 to 100">
+          {Array.from({ length: 5 }, (_, i) => {
+            const result = results[i]
+            const points = result?.answer?.points ?? 0
+            return <li key={i} aria-label={`Question ${i + 1}: ${result ? `${points} points` : 'not played'}`}>
+              <div className="chart-track"><div className={`chart-bar ${points === 0 ? 'zero' : ''}`} style={{ height: `${points}%` }}><strong>{result ? points : '—'}</strong></div></div>
+              <span className="chart-label">Q{i + 1}</span>
+            </li>
+          })}
+        </ol>
+      </div>
+    </figure>
+  )
+}
+
+function readDeck(week: string): { deck: Question[]; error: string } {
+  try {
+    return { deck: weeklyDeck(week, customQuestions), error: '' }
+  } catch (error) {
+    return { deck: [], error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 function readSaved(week: string): { session: Session | null; error: string } {
   try {
     return { session: loadSession(week), error: '' }
@@ -42,8 +95,9 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
   const [initial] = useState(() => readSaved(week))
   const [session, setSession] = useState(initial.session)
   const [storageError, setStorageError] = useState(initial.error)
-  const [previewDeck] = useState(() => weeklyDeck(week, customQuestions))
-  const deck = session?.deck ?? previewDeck
+  const [preview] = useState(() => readDeck(week))
+  const deck = session?.deck ?? preview.deck
+  const packError = session ? '' : preview.error
   const toResult = (round: Round, index: number): RoundResult => ({
     question: deck[index], answer: round.answerIndex === null ? undefined : deck[index].answers[round.answerIndex],
     skipped: round.answerIndex === null, timedOut: round.timedOut,
@@ -116,7 +170,7 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
   }
 
   function startGame() {
-    if (session || storageError) return
+    if (session || storageError || packError) return
     const saved = readSaved(week)
     if (saved.error) { setStorageError(saved.error); return }
     if (saved.session) { setSession(saved.session); return }
@@ -180,7 +234,7 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
   return (
     <div className="site-shell">
       <header className="header">
-        <a className="brand" href="./" aria-label="Niche home"><span className="brand-mark"><img src="/favicon.svg" alt="" width="42" height="42" /></span>niche<span className="brand-dot">.</span></a>
+        <a className="brand" href="./" aria-label="Niche home"><span className="brand-mark" aria-hidden="true">N</span>niche<span className="brand-dot">.</span></a>
         <nav aria-label="Main navigation">
           <button onClick={() => setShowHelp(true)}>How to play <span className="help-circle">?</span></button>
         </nav>
@@ -190,8 +244,8 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
         <div className="play-layout">
           <div className="week-picker"><label htmlFor="week">Weekly pack</label><select id="week" disabled={Boolean(storageError && session)} value={week} onChange={(event) => selectWeek(event.target.value)}>{weeks.map((name) => <option key={name} value={name}>{name}</option>)}</select></div>
           <section className="game-card" aria-label="Trivia game">
-            <div className="game-topline"><span><span className="live-dot" /> {complete ? 'SESSION COMPLETE' : started ? 'GROVER TRIVIA' : 'READY WHEN YOU ARE'}</span><span>Grove City College Trivia</span></div>
-            <div className="game-stats"><span>Round <strong>{complete ? deck.length : results.length + 1}</strong><span className="muted"> / {deck.length}</span></span><span className="score"><Icon name="trophy" size={18} /><strong>{displayedTotal.toLocaleString()}</strong> <span className="muted">pts</span></span></div>
+            <div className="game-topline"><span><span className="live-dot" /> {complete ? 'RUN COMPLETE' : started ? 'GAME IN PROGRESS' : 'AWAITING PLAYER'}</span><span>GROVER / TRIVIA ARCADE</span></div>
+            <div className="game-stats"><div className="round-readout"><span className="eyebrow">QUESTION</span><strong>{String(complete ? deck.length : started ? results.length + 1 : 0).padStart(2, '0')}<span className="muted"> / 05</span></strong></div><div className="score"><span className="eyebrow"><Icon name="trophy" size={14} /> TOTAL SCORE</span><AnimatedScore value={displayedTotal} /><span className="score-gain" key={`${results.length}-${currentResult?.answer?.points ?? 0}`}>{currentResult?.answer ? `+${currentResult.answer.points} PTS` : `${maxScore || 500} POSSIBLE`}</span></div></div>
             <div className="round-progress" aria-label={`${results.length} of ${deck.length} rounds completed`}>{deck.map((item, i) => <span key={item.id} className={i < results.length ? 'done' : started && i === results.length ? 'current' : ''} />)}</div>
 
             {complete ? (
@@ -199,6 +253,7 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
                 <span className="category-chip"><Icon name="trophy" size={15} /> THAT’S A WRAP</span>
                 <h2>{total >= maxScore * 0.7 ? 'A fine bit of niche knowledge.' : total >= maxScore * 0.3 ? 'Nicely done.' : 'Curiosity looks good on you.'}</h2>
                 <p>You scored <strong>{total.toLocaleString()} / {maxScore}</strong> in {week}.</p>
+                <ScoreChart results={results} />
                 <ul className="summary-list">{results.map((result, i) => <li key={result.question.id}><span className="summary-number">{i + 1}</span><span>{result.answer?.name ?? (result.timedOut ? 'Time ran out' : 'Skipped')}<small>{result.question.category}</small></span><strong>+{result.answer?.points ?? 0}</strong></li>)}</ul>
                 <section className="question-review" aria-labelledby="review-title">
                   <h3 id="review-title">Review all answers</h3>
@@ -207,13 +262,16 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
                 <p>This week is complete. Choose another pack above to play a different week.</p>
               </div>
             ) : !started ? (
-              <div className="question-body">
+              <div className="question-body intro">
                 <span className="category-chip"><Icon name="cap" size={15} /> GROVER TRIVIA</span>
-                <h1>Ready to play?</h1>
+                <p className="intro-kicker">SMALL CAMPUS. BIG KNOWLEDGE.</p>
+                <h1>Think niche.<br /><span>Score big.</span></h1>
                 <div className="start-panel">
-                  <p>{deck.length} questions. 30 seconds each. Answers earn 10–100 points.</p>
-                  <p>One game per week in this browser. Progress and results are saved; all accepted answers are revealed only at the end.</p>
-                  <button className="primary-button" disabled={Boolean(storageError)} onClick={startGame}>Start the clock <Icon name="arrow" /></button>
+                  <div className="game-rules"><span><strong>05</strong>QUESTIONS</span><span><strong>30s</strong>PER ROUND</span><span><strong>500</strong>MAX POINTS</span></div>
+                  <p>The less obvious your answer, the bigger your score.</p>
+                  {packError && <p className="form-error" role="alert">{packError}</p>}
+                  <button className="primary-button" disabled={Boolean(storageError || packError)} onClick={startGame}>Start game <Icon name="arrow" /></button>
+                  <p className="save-note">ONE RUN PER WEEK / PROGRESS SAVED AUTOMATICALLY</p>
                 </div>
               </div>
             ) : (
@@ -224,7 +282,7 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
                   <p className="question-detail">{question.detail}</p>
                   {!currentResult ? (
                     <form onSubmit={submit} noValidate>
-                      <label htmlFor="answer">YOUR ANSWER</label>
+                      <label htmlFor="answer"><span aria-hidden="true">&gt; </span>YOUR ANSWER</label>
                       <div className={`answer-input ${error ? 'input-error' : ''}`}><input id="answer" ref={inputRef} autoComplete="off" maxLength={120} value={input} onChange={(event) => { setInput(event.target.value); setError(''); setCorrection('') }} placeholder="Type your answer…" aria-invalid={Boolean(error)} aria-describedby={error ? 'answer-error' : correction ? 'answer-correction' : 'answer-hint'} /><span aria-hidden="true">↵</span></div>
                       {error ? <p className="form-error" id="answer-error" role="alert">{error}</p> : correction ? <p className="answer-correction" id="answer-correction" role="status">{correction}</p> : <p className="answer-hint" id="answer-hint">Aliases and small typos are corrected for you to confirm.</p>}
                       <div className="answer-actions"><button className="primary-button" type="submit">{correction ? 'Confirm answer' : 'Submit answer'} <Icon name="arrow" /></button><button className="skip-button" type="button" onClick={() => { setError(''); setCorrection(''); lockAnswer(null) }}>Give up · 0 pts</button></div>
@@ -244,7 +302,7 @@ function WeeklyGame({ week, selectWeek }: { week: string; selectWeek: (week: str
         </div>
       </main>
 
-      {showHelp && <dialog ref={helpRef} aria-labelledby="help-title" onCancel={(event) => { event.preventDefault(); setShowHelp(false) }}><button className="close-button" aria-label="Close instructions" onClick={() => setShowHelp(false)}>×</button><span className="category-chip"><Icon name="cap" size={16} /> GROVER TRIVIA</span><h2 id="help-title">How to play</h2><p>Start the clock for up to five Grove City questions. Each question has a 30-second timer; a correct answer earns 10–100 points. Less common answers earn more.</p><p>Aliases and answers within one or two character edits of a unique closest match are replaced with the main answer. Review the correction and submit again to confirm it before time runs out. Editing the answer clears the confirmation. Equally close matches need a more specific answer.</p><p>If you run out of time or give up, that question is worth zero. Other answers are revealed only after the game. Each weekly pack can be played once in this browser; returning to it shows saved progress or final results. Reloading does not reset an active round’s clock. Switching weeks pauses between rounds, not during an active timer.</p><button className="primary-button" onClick={() => setShowHelp(false)}>Got it <Icon name="arrow" /></button></dialog>}
+      {showHelp && <dialog ref={helpRef} aria-labelledby="help-title" onCancel={(event) => { event.preventDefault(); setShowHelp(false) }}><button className="close-button" aria-label="Close instructions" onClick={() => setShowHelp(false)}>×</button><span className="category-chip"><Icon name="cap" size={16} /> GROVER TRIVIA</span><h2 id="help-title">How to play</h2><p>Start the game for five Grove City questions. Each question has a 30-second timer; a correct answer earns 10–100 points. Less common answers earn more.</p><p>Aliases and answers within one or two character edits of a unique closest match are replaced with the main answer. Typo correction requires at least three letters or digits in both names; shorter answers must match exactly. The symbols # and + matter, so C, C# and C++ are distinct. Review the correction and submit again to confirm it before time runs out. Editing the answer clears the confirmation. Equally close matches need a more specific answer.</p><p>If you run out of time or give up, that question is worth zero. Other answers are revealed only after the game. Each weekly pack can be played once in this browser; returning to it shows saved progress or final results. Reloading does not reset an active round’s clock. Switching weeks pauses between rounds, not during an active timer.</p><button className="primary-button" onClick={() => setShowHelp(false)}>Got it <Icon name="arrow" /></button></dialog>}
     </div>
   )
 }

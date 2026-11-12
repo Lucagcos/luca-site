@@ -21,7 +21,9 @@ export function listWeeks(bank: Question[]): string[] {
 export function weeklyDeck(week: string, bank: Question[], random = Math.random): Question[] {
   const custom = bank.filter((question) => question.pack === 'grover' && (question.week ?? defaultWeek) === week)
   if (!custom.length && week !== defaultWeek) throw new Error(`No questions found for ${week}.`)
-  return makeDeck('grover', random, questions, custom)
+  const deck = makeDeck('grover', random, questions, custom)
+  if (deck.length !== 5) throw new Error(`${week} needs at least five questions before it can be played. Choose another weekly pack.`)
+  return deck
 }
 
 export function beginSession(week: string, deck: Question[], now = Date.now()): Session {
